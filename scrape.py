@@ -5,14 +5,14 @@ from selenium import webdriver;
 from multiprocessing import Process, Lock, Pool;
 import codecs;
 from os.path import join, exists;
-from os import makedirs, listdir;
+from os import makedirs, listdir, remove;
 import pandas as pd;
 
 def get_table_for_county(info):
   crop = info[0].strip();
   id = info[1].strip();
   driver = webdriver.Firefox();
-  driver.set_page_load_timeout(20);
+  driver.set_page_load_timeout(10);
   print('firefox started');
   try:
     page_url = 'http://glam1n1.gsfc.nasa.gov/wui/2.2.0/chart.html?sat=MYD&mean=2003-2011&layer=NDVI&crop={}&type=ADM&n=1&numIds=1&level=3&initYr=2017&id0={}';
@@ -58,29 +58,32 @@ def consolidate_csv(data_dir, outfile):
 
 if __name__ == '__main__':
 
-  crops = ['NASS_2010_corn'];
+  crops = ['NASS_2010_soybeans', 'NASS_2010_cotton', 'NASS_2010_winter-wheat', 'NASS_2010_corn'];
   counties = [];
   with codecs.open('counties', 'r', 'utf-8') as f:
     for line in f:
-      counties.append(line)
-  info = [];
+      splt = line.split('|');
+      if splt[2] == 'United States of America':
+        counties.append(line)
   for crop in crops:
+    info = [];
     for county in counties:
       info.append((crop, county));
-  if True:
-    pool = Pool(processes=2);
-    res = pool.map(get_table_for_county, info[0:100]);
+#  if True:
+    pool = Pool(processes=4);
+    res = pool.map(get_table_for_county, info);
     pool.close();
     pool.join();
     with codecs.open('file_links', 'a', 'utf-8') as f:
       for link in res:
         link_str = ",".join(link);
         f.write(link_str + "\n");
-  else:
-    res = [];
-    with codecs.open('file_links', 'r', 'utf-8') as f:
-      for line in f:
-        spl = line.strip().split(',');
-        res.append((spl[0], spl[1]));
-  fetch_files('data', res);
-  consolidate_csv('data', 'data.csv');
+#  else:
+#    res = [];
+#    with codecs.open('file_links', 'r', 'utf-8') as f:
+#      for line in f:
+#        spl = line.strip().split(',');
+#        res.append((spl[0], spl[1]));
+    fetch_files('data', res);
+    remove('file_links');
+    consolidate_csv('data', crop + '.csv');
