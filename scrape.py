@@ -11,11 +11,11 @@ import pandas as pd;
 def get_table_for_county(info):
   crop = info[0].strip();
   id = info[1].strip();
-  driver = webdriver.Firefox();
+  driver = webdriver.Firefox(executable_path='/Users/aayush/Developer/gams-scraper.git/geckodriver');
   driver.set_page_load_timeout(10);
   print('firefox started');
   try:
-    page_url = 'http://glam1n1.gsfc.nasa.gov/wui/2.2.0/chart.html?sat=MYD&mean=2003-2011&layer=NDVI&crop={}&type=ADM&n=1&numIds=1&level=3&initYr=2017&id0={}';
+    page_url = 'https://glam1.gsfc.nasa.gov/wui/3.1.0/chart.html?sat=MYD&mean=2003-2015&layer=NDVI&crop={}&type=ADM&n=1&numIds=1&level=3&initYr=2017&id0={}';
     id0 = urllib.parse.quote_plus(id);
     driver.get(page_url.format(crop, id0));
     table = driver.find_element_by_id("table_download").get_attribute('href');
@@ -44,15 +44,22 @@ def fetch_files(output_dir, links):
       f.write('\n'.join(table_rows).strip());
 
 def consolidate_csv(data_dir, outfile):
+  headings = [ 'SAMPLE VALUE', 'SAMPLE COUNT', 'MEAN VALUE', 'MEAN COUNT' ]
   data_files = listdir(data_dir);
   data = {};
   for fname in data_files:
     if fname[0] == '.':
       continue;
     data[fname] = pd.read_csv(join(data_dir, fname));
+    print(data[fname]);
     l = len(data[fname]['START DATE']);
     data[fname]['COUNTY ID'] = pd.Series([int(fname)]*l);
   master = pd.concat(list(data.values()));
+  for head in headings:
+    table1 = pd.pivot_table(master[['ORDINAL DATE', 'COUNTY ID', head ]], index='ORDINAL DATE', columns='COUNTY ID');
+    crop = outfile.split('.')[0];
+    with codecs.open( crop + '_' + head.replace(' ', '_') + '.csv', 'w', 'utf-8') as f:
+      table1.to_csv(f);
   with codecs.open(outfile, 'w', 'utf-8') as f:
     master.to_csv(f, index=False);
 
@@ -69,7 +76,6 @@ if __name__ == '__main__':
     info = [];
     for county in counties:
       info.append((crop, county));
-#  if True:
     pool = Pool(processes=4);
     res = pool.map(get_table_for_county, info);
     pool.close();
@@ -78,12 +84,6 @@ if __name__ == '__main__':
       for link in res:
         link_str = ",".join(link);
         f.write(link_str + "\n");
-#  else:
-#    res = [];
-#    with codecs.open('file_links', 'r', 'utf-8') as f:
-#      for line in f:
-#        spl = line.strip().split(',');
-#        res.append((spl[0], spl[1]));
     fetch_files('data', res);
     remove('file_links');
     consolidate_csv('data', crop + '.csv');
